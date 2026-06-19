@@ -687,6 +687,18 @@ with tab_data:
         "fiscal_deficit_pct_gdp":     "Fiscal Deficit (%)",
     }
     tdf = df[list(cols.keys())].rename(columns=cols).set_index("Year")
+
+    def _gradient(series: pd.Series, lo_rgb, hi_rgb, vmin: float, vmax: float):
+        styles = []
+        rng = (vmax - vmin) or 1
+        for v in series:
+            t = max(0.0, min(1.0, (v - vmin) / rng))
+            r = round(lo_rgb[0] + (hi_rgb[0] - lo_rgb[0]) * t)
+            g = round(lo_rgb[1] + (hi_rgb[1] - lo_rgb[1]) * t)
+            b = round(lo_rgb[2] + (hi_rgb[2] - lo_rgb[2]) * t)
+            styles.append(f"background-color: rgb({r},{g},{b})")
+        return styles
+
     styled = (
         tdf.style
         .format({
@@ -696,8 +708,8 @@ with tab_data:
             "Trade Balance ($M)":"{:,.0f}", "Unemployment (%)":"{:.1f}",
             "FDI ($M)":"{:.1f}", "Fiscal Deficit (%)":"{:.1f}",
         })
-        .background_gradient(subset=["Growth (%)"],    cmap="RdYlGn", vmin=-5,  vmax=10)
-        .background_gradient(subset=["Inflation (%)"], cmap="YlOrRd", vmin=0,   vmax=15)
+        .apply(_gradient, lo_rgb=(248,113,113), hi_rgb=(134,239,172), vmin=-5, vmax=10, subset=["Growth (%)"])
+        .apply(_gradient, lo_rgb=(254,249,195), hi_rgb=(248,113,113), vmin=0,  vmax=15, subset=["Inflation (%)"])
         .set_properties(**{"font-size": "12px"})
     )
     st.dataframe(styled, use_container_width=True, height=500)
