@@ -1,12 +1,9 @@
 """
 Nepal Economic Insights Dashboard
-Main Streamlit application entry point.
 """
 
 import sys
 from pathlib import Path
-
-# Allow imports from project root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
@@ -14,443 +11,679 @@ import pandas as pd
 
 from src.data_processing import load_clean_data, filter_years, latest_row, prev_row
 from src.visualization import (
-    gdp_trend,
-    gdp_growth_bar,
-    inflation_trend,
-    trade_comparison,
-    trade_balance_chart,
-    trade_composition_pie,
-    remittance_trend,
-    unemployment_trend,
-    sector_area_chart,
-    correlation_heatmap,
-    fdi_trend,
+    gdp_trend, gdp_growth_bar, inflation_trend,
+    trade_comparison, trade_balance_chart, trade_composition_pie,
+    remittance_trend, unemployment_trend, sector_area_chart,
+    correlation_heatmap, fdi_trend,
 )
-from src.utils import COLORS, format_currency, format_pct, cagr, delta_arrow
-
-
-# ── Page config ───────────────────────────────────────────────────────────────
+from src.utils import C, FONT, format_currency, cagr
 
 st.set_page_config(
     page_title="Nepal Economic Insights",
-    page_icon="🇳🇵",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-
-# ── Custom CSS ────────────────────────────────────────────────────────────────
-
-st.markdown("""
+# ── Stylesheet ────────────────────────────────────────────────────────────────
+st.markdown(f"""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+*, html, body, [class*="css"] {{ font-family: 'Inter', sans-serif; }}
 
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+/* ─── Sidebar ─────────────────────────────────────────────────────────── */
+[data-testid="stSidebar"] {{
+    background: linear-gradient(180deg, {C['sidebar_from']} 0%, {C['sidebar_to']} 100%);
+}}
+[data-testid="stSidebar"] * {{ color: #B8CCAE !important; }}
+[data-testid="stSidebar"] .s-brand {{
+    font-size: 20px; font-weight: 800; color: {C['cream']} !important;
+    letter-spacing: -.02em; line-height: 1.25; margin: 4px 0 2px;
+}}
+[data-testid="stSidebar"] .s-tagline {{
+    font-size: 11px; color: #7A9A72 !important;
+    margin-bottom: 20px; font-weight: 400;
+}}
+[data-testid="stSidebar"] .s-label {{
+    font-size: 9px; font-weight: 700; letter-spacing: .14em;
+    text-transform: uppercase; color: #6A8562 !important; margin-bottom: 8px;
+}}
+[data-testid="stSidebar"] hr {{ border-color: #3A5530 !important; margin: 16px 0; }}
+[data-testid="stSidebar"] .s-src {{
+    font-size: 11px; color: #7A9A72 !important; padding: 2px 0; display: block;
+}}
+[data-testid="stSidebar"] .s-src::before {{
+    content: "—  "; color: #4A6A42 !important;
+}}
+[data-testid="stSidebar"] a.s-src {{
+    text-decoration: none; transition: color .15s;
+}}
+[data-testid="stSidebar"] a.s-src:hover {{
+    color: {C['cream']} !important;
+}}
 
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #003893 0%, #002560 100%);
-    }
-    [data-testid="stSidebar"] * { color: #FFFFFF !important; }
-    [data-testid="stSidebar"] .stSlider > div > div > div { background: #DC143C; }
+/* ─── Main ────────────────────────────────────────────────────────────── */
+.main .block-container {{ padding: 1.6rem 2.4rem 3rem; max-width: 1440px; }}
+#MainMenu, footer, header {{ visibility: hidden; }}
+.stDeployButton {{ display: none; }}
 
-    /* KPI cards */
-    .kpi-card {
-        background: #FFFFFF;
-        border-radius: 12px;
-        padding: 18px 22px;
-        border-left: 5px solid #003893;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        margin-bottom: 8px;
-    }
-    .kpi-label  { font-size: 12px; font-weight: 600; color: #7F8C8D; text-transform: uppercase; letter-spacing: .06em; }
-    .kpi-value  { font-size: 28px; font-weight: 700; color: #003893; margin: 4px 0; }
-    .kpi-delta  { font-size: 13px; font-weight: 500; }
-    .kpi-delta.pos { color: #27AE60; }
-    .kpi-delta.neg { color: #E74C3C; }
+/* ─── Page header ─────────────────────────────────────────────────────── */
+.ph {{
+    border-bottom: 2px solid {C['border']};
+    padding-bottom: 16px; margin-bottom: 24px;
+}}
+.ph-eyebrow {{
+    font-size: 10px; font-weight: 700; letter-spacing: .16em;
+    text-transform: uppercase; color: {C['green']};
+    margin-bottom: 6px;
+}}
+.ph-title {{
+    font-size: 28px; font-weight: 800; color: {C['ink']};
+    letter-spacing: -.03em; margin: 0 0 4px; line-height: 1.2;
+}}
+.ph-sub {{
+    font-size: 13px; color: {C['muted']}; font-weight: 400;
+}}
 
-    /* Section headers */
-    .section-header {
-        font-size: 20px; font-weight: 700; color: #003893;
-        border-bottom: 2px solid #DC143C;
-        padding-bottom: 6px; margin: 32px 0 16px;
-    }
+/* ─── KPI strip ───────────────────────────────────────────────────────── */
+.kpi-strip {{
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+}}
+.kc {{
+    border-radius: 12px; padding: 18px 20px 14px;
+    border: 1px solid {C['border']};
+    background: {C['white']};
+    border-top: 3px solid transparent;
+}}
+.kc-gold   {{ border-top-color: {C['gold']}; }}
+.kc-green  {{ border-top-color: {C['green']}; }}
+.kc-forest {{ border-top-color: {C['forest']}; }}
+.kc-olive  {{ border-top-color: #8B9E3C; }}
+.kc-muted  {{ border-top-color: {C['muted']}; }}
 
-    /* Tab style */
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 8px 8px 0 0;
-        font-weight: 600;
-        padding: 8px 20px;
-    }
+.kpi-label {{
+    font-size: 9px; font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: {C['muted']}; margin-bottom: 8px;
+}}
+.kpi-value {{
+    font-size: 26px; font-weight: 800; letter-spacing: -.03em;
+    line-height: 1.1; color: {C['ink']}; margin-bottom: 6px;
+}}
+.kpi-delta {{ font-size: 11px; color: {C['muted']}; font-weight: 400; }}
+.kpi-delta .up {{ color: {C['pos']}; font-weight: 600; }}
+.kpi-delta .dn {{ color: {C['neg']}; font-weight: 600; }}
+.kpi-sub {{ font-size: 10px; color: {C['subtle']}; margin-top: 4px; }}
 
-    /* Hide Streamlit branding */
-    #MainMenu, footer { visibility: hidden; }
+/* ─── Tabs ────────────────────────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {{
+    gap: 0; border-bottom: 2px solid {C['border']}; background: transparent;
+}}
+.stTabs [data-baseweb="tab"] {{
+    font-size: 12px; font-weight: 600; letter-spacing: .02em;
+    color: {C['muted']}; padding: 9px 20px;
+    background: transparent; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; border-radius: 0; transition: color .15s;
+}}
+.stTabs [aria-selected="true"] {{
+    color: {C['forest']} !important;
+    border-bottom-color: {C['gold']} !important;
+    background: transparent !important;
+}}
+.stTabs [data-baseweb="tab-panel"] {{ padding-top: 20px; }}
+
+/* ─── Stat row ────────────────────────────────────────────────────────── */
+.stat-row {{ display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }}
+.stat {{
+    flex: 1; min-width: 130px;
+    background: {C['surface']}; border-radius: 8px;
+    padding: 14px 16px; border: 1px solid {C['border']};
+}}
+.stat-label {{
+    font-size: 9px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: {C['subtle']}; margin-bottom: 5px;
+}}
+.stat-value {{
+    font-size: 22px; font-weight: 800; color: {C['ink']};
+    letter-spacing: -.02em; line-height: 1.1;
+}}
+.stat-sub {{ font-size: 10px; color: {C['muted']}; margin-top: 3px; }}
+
+/* ─── Section header ──────────────────────────────────────────────────── */
+.sec {{
+    font-size: 10px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: {C['slate']};
+    padding: 7px 12px; margin: 24px 0 12px;
+    background: {C['surface']}; border-radius: 4px;
+    border-left: 3px solid {C['gold']};
+}}
+
+/* ─── Note boxes ──────────────────────────────────────────────────────── */
+.note {{
+    border-radius: 8px; padding: 12px 16px; margin: 10px 0;
+    font-size: 13px; line-height: 1.65; color: {C['slate']};
+}}
+.note b {{ font-weight: 700; color: {C['ink']}; }}
+.note-gold   {{ background: #FFFBEA; border: 1px solid #F5E080; }}
+.note-green  {{ background: #F0F5EC; border: 1px solid #BFCFB8; }}
+.note-slate  {{ background: {C['surface']}; border: 1px solid {C['border']}; }}
+.note-warn   {{ background: #FEF3F0; border: 1px solid #F5C4B8; }}
+
+/* ─── Expander ────────────────────────────────────────────────────────── */
+[data-testid="stExpander"] {{
+    border: 1px solid {C['border']} !important;
+    border-radius: 8px !important; box-shadow: none !important;
+}}
+
+/* ─── Year pills ──────────────────────────────────────────────────────── */
+div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] > div {{
+    padding: 0 !important;
+}}
+.year-row {{ display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }}
+.year-label {{
+    font-size: 9px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: {C['muted']}; margin-right: 6px;
+}}
+/* active pill button */
+button[data-baseweb="button"].pill-active {{
+    background: {C['forest']} !important; color: {C['cream']} !important;
+    border: 1px solid {C['forest']} !important;
+}}
+
+/* ─── Footer ──────────────────────────────────────────────────────────── */
+.footer {{
+    margin-top: 48px; padding-top: 14px;
+    border-top: 1px solid {C['border']};
+    font-size: 11px; color: {C['subtle']};
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px;
+}}
 </style>
 """, unsafe_allow_html=True)
 
-
 # ── Data ──────────────────────────────────────────────────────────────────────
-
 @st.cache_data(show_spinner=False)
-def get_data() -> pd.DataFrame:
+def get_data():
     return load_clean_data()
 
-
 df_full = get_data()
-YEAR_MIN = int(df_full["year"].min())
-YEAR_MAX = int(df_full["year"].max())
-
+YEAR_MIN, YEAR_MAX = int(df_full["year"].min()), int(df_full["year"].max())
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
-
 with st.sidebar:
-    st.image(
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Flag_of_Nepal.svg/200px-Flag_of_Nepal.svg.png",
-        width=60,
-    )
-    st.markdown("## 🇳🇵 Nepal Economic Insights")
+    st.markdown(f"""
+    <p class="s-brand">Nepal Economic<br>Insights</p>
+    <p class="s-tagline">Macroeconomic indicators · 2005–{YEAR_MAX}</p>
+    """, unsafe_allow_html=True)
     st.markdown("---")
-
-    st.markdown("### Filters")
-    year_range = st.slider(
-        "Year Range",
-        min_value=YEAR_MIN,
-        max_value=YEAR_MAX,
-        value=(YEAR_MIN, YEAR_MAX),
-        step=1,
-    )
-
+    st.markdown('<p class="s-label">Year Range</p>', unsafe_allow_html=True)
+    year_range = st.slider("", YEAR_MIN, YEAR_MAX, (YEAR_MIN, YEAR_MAX),
+                           label_visibility="collapsed")
     st.markdown("---")
-    st.markdown("### Data Sources")
+    st.markdown('<p class="s-label">Data Sources</p>', unsafe_allow_html=True)
+    for src, url in [
+        ("World Bank Open Data",        "https://data.worldbank.org/country/nepal"),
+        ("Nepal Rastra Bank (NRB)",     "https://www.nrb.org.np/"),
+        ("Central Bureau of Statistics","https://censusnepal.cbs.gov.np/"),
+        ("IMF World Economic Outlook",  "https://www.imf.org/en/Publications/WEO"),
+        ("UNCTAD World Investment Report","https://unctad.org/topic/investment/world-investment-report"),
+    ]:
+        st.markdown(f'<a class="s-src" href="{url}" target="_blank">{src}</a>', unsafe_allow_html=True)
+    st.markdown("---")
     st.markdown("""
-- World Bank Open Data
-- Nepal Rastra Bank (NRB)
-- Central Bureau of Statistics
-- IMF World Economic Outlook
-    """)
-    st.markdown("---")
-    st.caption("Dashboard by **Sachin Dhakal**  \nAspiring Data Analyst")
+    <p class="s-label">Author</p>
+    <p style="font-size:13px;font-weight:600;color:#D4E8CC !important;margin:0">Sachin Dhakal</p>
+    <p style="font-size:11px;color:#7A9A72 !important;margin:2px 0 0">Data Analyst</p>
+    """, unsafe_allow_html=True)
 
+df     = filter_years(df_full, year_range[0], year_range[1])
 
-df = filter_years(df_full, year_range[0], year_range[1])
-latest = latest_row(df)
-prev = prev_row(df) if len(df) > 1 else latest
+# ── Selected year (year-pill hover/click) ─────────────────────────────────────
+years_in_range = sorted(df["year"].tolist())
+if "sel_year" not in st.session_state or st.session_state.sel_year not in years_in_range:
+    st.session_state.sel_year = years_in_range[-1]
 
+def _pick(y):
+    st.session_state.sel_year = y
 
-# ── Header ────────────────────────────────────────────────────────────────────
+def _sel_row(df: pd.DataFrame, year: int) -> pd.Series:
+    return df[df["year"] == year].iloc[0]
 
-st.markdown("""
-<h1 style='color:#003893; font-size:36px; font-weight:800; margin-bottom:4px;'>
-    🇳🇵 Nepal Economic Insights Dashboard
-</h1>
-<p style='color:#555; font-size:15px; margin-top:0;'>
-    Macroeconomic performance • GDP • Trade • Remittance • Inflation • Employment
-</p>
+def _prev_row(df: pd.DataFrame, year: int) -> pd.Series:
+    idx = years_in_range.index(year)
+    return df[df["year"] == years_in_range[idx - 1]].iloc[0] if idx > 0 else _sel_row(df, year)
+
+sel_yr  = st.session_state.sel_year
+latest  = _sel_row(df, sel_yr)
+prev    = _prev_row(df, sel_yr)
+
+# ── Page header ───────────────────────────────────────────────────────────────
+st.markdown(f"""
+<div class="ph">
+  <div class="ph-eyebrow">Nepal · Macroeconomic Overview · {year_range[0]}–{year_range[1]} · Showing {sel_yr}</div>
+  <h1 class="ph-title">Economic Indicators Dashboard</h1>
+  <p class="ph-sub">GDP, Inflation, Trade, Remittance and Employment — sourced from World Bank, NRB, CBS, IMF</p>
+</div>
 """, unsafe_allow_html=True)
 
-st.markdown(f"**Showing data:** {year_range[0]} – {year_range[1]}&nbsp;&nbsp;|&nbsp;&nbsp;"
-            f"**Latest year:** {int(latest['year'])}&nbsp;&nbsp;|&nbsp;&nbsp;"
-            f"**Source:** World Bank · NRB · CBS · IMF")
+# ── Year pill selector ────────────────────────────────────────────────────────
+st.markdown('<p style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;'
+            f'color:{C["muted"]};margin-bottom:6px">Select Year</p>', unsafe_allow_html=True)
+pill_cols = st.columns(len(years_in_range))
+for col, y in zip(pill_cols, years_in_range):
+    with col:
+        is_active = (y == sel_yr)
+        label = str(y)
+        if is_active:
+            st.markdown(
+                f'<div style="background:{C["forest"]};color:{C["cream"]};'
+                f'text-align:center;border-radius:6px;padding:5px 0;'
+                f'font-size:11px;font-weight:700;cursor:default">{label}</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            if st.button(label, key=f"yr_{y}", use_container_width=True):
+                _pick(y)
+                st.rerun()
 
-st.markdown("---")
+# style the plain year buttons to be compact
+st.markdown(f"""
+<style>
+button[kind="secondary"] {{
+    padding: 4px 0 !important; font-size: 11px !important;
+    font-weight: 500 !important; border-radius: 6px !important;
+    border: 1px solid {C['border']} !important;
+    color: {C['slate']} !important; background: {C['surface']} !important;
+}}
+button[kind="secondary"]:hover {{
+    border-color: {C['green']} !important; color: {C['green']} !important;
+    background: #F0F5EC !important;
+}}
+</style>
+""", unsafe_allow_html=True)
 
+# ── KPI helper ────────────────────────────────────────────────────────────────
+def _delta(val, unit="%", invert=False):
+    good = (val > 0) if not invert else (val < 0)
+    cls  = "up" if good else "dn"
+    sym  = "+" if val > 0 else ""
+    return f'<span class="{cls}">{sym}{val:.1f}{unit}</span> vs prior year'
 
-# ── KPI Cards ─────────────────────────────────────────────────────────────────
+gdp_g   = latest["gdp_growth_pct"]
+inf_d   = latest["inflation_pct"]  - prev["inflation_pct"]
+rem_d   = latest["remittance_usd_billion"] - prev["remittance_usd_billion"]
+tb      = latest["trade_balance_usd_million"] / 1000
+tb_d    = (latest["trade_balance_usd_million"] - prev["trade_balance_usd_million"]) / 1000
+unemp_d = latest["unemployment_pct"] - prev["unemployment_pct"]
 
-def kpi_card(label: str, value: str, delta: float, delta_label: str = "vs prev year") -> str:
-    arrow = delta_arrow(delta)
-    cls = "pos" if delta >= 0 else "neg"
-    delta_str = format_pct(delta) if delta != 0 else "—"
-    return f"""
-    <div class="kpi-card">
-        <div class="kpi-label">{label}</div>
-        <div class="kpi-value">{value}</div>
-        <div class="kpi-delta {cls}">{arrow} {delta_str} {delta_label}</div>
-    </div>
-    """
-
-
-gdp_delta = latest["gdp_usd_billion"] - prev["gdp_usd_billion"]
-inf_delta = latest["inflation_pct"] - prev["inflation_pct"]
-rem_delta = latest["remittance_usd_billion"] - prev["remittance_usd_billion"]
-trade_delta = latest["trade_balance_usd_million"] - prev["trade_balance_usd_million"]
-
-col1, col2, col3, col4, col5 = st.columns(5)
-
-with col1:
-    st.markdown(kpi_card(
-        "GDP (USD)", format_currency(latest["gdp_usd_billion"]),
-        latest["gdp_growth_pct"], "real growth"
-    ), unsafe_allow_html=True)
-
-with col2:
-    st.markdown(kpi_card(
-        "Inflation Rate", f"{latest['inflation_pct']:.1f}%",
-        inf_delta
-    ), unsafe_allow_html=True)
-
-with col3:
-    st.markdown(kpi_card(
-        "Remittance", format_currency(latest["remittance_usd_billion"]),
-        rem_delta
-    ), unsafe_allow_html=True)
-
-with col4:
-    tb = latest["trade_balance_usd_million"] / 1000
-    st.markdown(kpi_card(
-        "Trade Balance", format_currency(abs(tb)) + (" deficit" if tb < 0 else " surplus"),
-        trade_delta / 1000
-    ), unsafe_allow_html=True)
-
-with col5:
-    st.markdown(kpi_card(
-        "Unemployment", f"{latest['unemployment_pct']:.1f}%",
-        -(latest["unemployment_pct"] - prev["unemployment_pct"])   # lower = better
-    ), unsafe_allow_html=True)
-
+# ── KPI cards ─────────────────────────────────────────────────────────────────
+st.markdown(f"""
+<div class="kpi-strip">
+  <div class="kc kc-green">
+    <div class="kpi-label">Nominal GDP</div>
+    <div class="kpi-value">{format_currency(latest['gdp_usd_billion'])}</div>
+    <div class="kpi-delta">{_delta(gdp_g)} real</div>
+    <div class="kpi-sub">USD Billion · {int(sel_yr)}</div>
+  </div>
+  <div class="kc kc-gold">
+    <div class="kpi-label">CPI Inflation</div>
+    <div class="kpi-value">{latest['inflation_pct']:.1f}%</div>
+    <div class="kpi-delta">{_delta(inf_d, 'pp', invert=True)}</div>
+    <div class="kpi-sub">NRB target 5.5–6.5%</div>
+  </div>
+  <div class="kc kc-forest">
+    <div class="kpi-label">Remittance</div>
+    <div class="kpi-value">{format_currency(latest['remittance_usd_billion'])}</div>
+    <div class="kpi-delta">{_delta(rem_d, 'B')}</div>
+    <div class="kpi-sub">{latest['remittance_pct_gdp']:.1f}% of GDP · NRB</div>
+  </div>
+  <div class="kc kc-olive">
+    <div class="kpi-label">Trade Balance</div>
+    <div class="kpi-value" style="color:{'#C0392B' if tb<0 else '#467235'}">${abs(tb):.2f}B</div>
+    <div class="kpi-delta">{'Deficit' if tb<0 else 'Surplus'} &nbsp; {_delta(tb_d, 'B', invert=True)}</div>
+    <div class="kpi-sub">Exports minus Imports</div>
+  </div>
+  <div class="kc kc-muted">
+    <div class="kpi-label">Unemployment</div>
+    <div class="kpi-value">{latest['unemployment_pct']:.1f}%</div>
+    <div class="kpi-delta">{_delta(-unemp_d)}</div>
+    <div class="kpi-sub">ILO modeled · World Bank</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
+tab_gdp, tab_inf, tab_trade, tab_rem, tab_emp, tab_sec, tab_data = st.tabs(
+    ["GDP", "Inflation", "Trade", "Remittance", "Employment", "Sectors", "Data"]
+)
 
-tab_gdp, tab_inflation, tab_trade, tab_remittance, tab_employment, tab_sectors, tab_advanced = st.tabs([
-    "📈 GDP",
-    "💸 Inflation",
-    "🌍 Trade",
-    "💰 Remittance",
-    "💼 Employment",
-    "🏭 Sectors",
-    "🔬 Advanced",
-])
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# GDP TAB
-# ─────────────────────────────────────────────────────────────────────────────
-
+# ══ GDP ═══════════════════════════════════════════════════════════════════════
 with tab_gdp:
-    st.markdown('<div class="section-header">GDP Overview</div>', unsafe_allow_html=True)
+    g5  = cagr(df["gdp_usd_billion"], min(5,  len(df)-1))
+    g10 = cagr(df["gdp_usd_billion"], min(10, len(df)-1))
 
-    gdp_cagr_5 = cagr(df["gdp_usd_billion"], min(5, len(df) - 1))
-    gdp_cagr_10 = cagr(df["gdp_usd_billion"], min(10, len(df) - 1))
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Latest GDP", format_currency(latest["gdp_usd_billion"]),
-              f"{latest['gdp_growth_pct']:+.1f}% real growth")
-    m2.metric("5-Year GDP CAGR", f"{gdp_cagr_5:.1f}%" if not pd.isna(gdp_cagr_5) else "—")
-    m3.metric("10-Year GDP CAGR", f"{gdp_cagr_10:.1f}%" if not pd.isna(gdp_cagr_10) else "—")
+    st.markdown(f"""
+    <div class="stat-row">
+      <div class="stat">
+        <div class="stat-label">Nominal GDP ({int(latest['year'])})</div>
+        <div class="stat-value">{format_currency(latest['gdp_usd_billion'])}</div>
+        <div class="stat-sub">{latest['gdp_growth_pct']:+.1f}% real growth</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">5-Year CAGR</div>
+        <div class="stat-value">{g5:.1f}%</div>
+        <div class="stat-sub">Nominal USD</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">10-Year CAGR</div>
+        <div class="stat-value">{g10:.1f}%</div>
+        <div class="stat-sub">Nominal USD</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">2026 Forecast</div>
+        <div class="stat-value">2.3–3.0%</div>
+        <div class="stat-sub">World Bank / IMF projection</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.plotly_chart(gdp_trend(df), use_container_width=True)
-
-    st.markdown('<div class="section-header">Real GDP Growth Rate</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec">Annual Growth Rate</div>', unsafe_allow_html=True)
     st.plotly_chart(gdp_growth_bar(df), use_container_width=True)
 
-    with st.expander("📋 GDP Data Table"):
-        st.dataframe(
-            df[["year", "gdp_usd_billion", "gdp_growth_pct"]].rename(columns={
-                "year": "Year",
-                "gdp_usd_billion": "GDP (USD B)",
-                "gdp_growth_pct": "Real Growth (%)",
-            }).set_index("Year"),
-            use_container_width=True,
-        )
+    st.markdown("""
+    <div class="note note-warn">
+      <b>2026 slowdown (2.3–3.0%):</b> Youth-led protests in September 2025 caused losses
+      estimated at 1.3% of GDP and triggered a change in government. Recovery is expected
+      as political conditions stabilise in FY2026/27.
+    </div>
+    <div class="note note-slate">
+      <b>FY2016/17 peak (9.0%):</b> Highest growth since 1994, driven by post-earthquake
+      reconstruction, improved hydropower output, and a rebound in tourism receipts following
+      the 2015 earthquake and Madhesh border disruption.
+    </div>
+    """, unsafe_allow_html=True)
 
+    with st.expander("GDP data table"):
+        st.dataframe(df[["year","gdp_usd_billion","gdp_growth_pct"]].rename(columns={
+            "year":"Year","gdp_usd_billion":"GDP (USD B)","gdp_growth_pct":"Growth (%)"
+        }).set_index("Year"), use_container_width=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# INFLATION TAB
-# ─────────────────────────────────────────────────────────────────────────────
+# ══ INFLATION ═════════════════════════════════════════════════════════════════
+with tab_inf:
+    avg_inf  = df["inflation_pct"].mean()
+    peak     = df["inflation_pct"].max()
+    peak_yr  = int(df.loc[df["inflation_pct"].idxmax(), "year"])
 
-with tab_inflation:
-    st.markdown('<div class="section-header">Inflation Rate Tracking</div>', unsafe_allow_html=True)
-
-    avg_inf = df["inflation_pct"].mean()
-    max_inf = df["inflation_pct"].max()
-    max_inf_year = df.loc[df["inflation_pct"].idxmax(), "year"]
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Current Inflation", f"{latest['inflation_pct']:.1f}%",
-              f"{inf_delta:+.1f}pp vs prev year")
-    m2.metric("Period Average", f"{avg_inf:.1f}%")
-    m3.metric("Peak Inflation", f"{max_inf:.1f}% ({int(max_inf_year)})")
+    st.markdown(f"""
+    <div class="stat-row">
+      <div class="stat">
+        <div class="stat-label">Current ({int(latest['year'])})</div>
+        <div class="stat-value">{latest['inflation_pct']:.1f}%</div>
+        <div class="stat-sub">{inf_d:+.1f}pp vs prior year</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Period Average</div>
+        <div class="stat-value">{avg_inf:.1f}%</div>
+        <div class="stat-sub">{year_range[0]}–{year_range[1]}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">All-time Peak</div>
+        <div class="stat-value">{peak:.1f}%</div>
+        <div class="stat-sub">Recorded in {peak_yr}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">NRB Target</div>
+        <div class="stat-value">5.5–6.5%</div>
+        <div class="stat-sub">Monetary policy band</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.plotly_chart(inflation_trend(df), use_container_width=True)
 
-    st.info(
-        "**Key observation:** Nepal's inflation spiked to ~13.1% in 2009 driven by global food "
-        "and fuel price shocks. The 2022 spike (7.7%) reflects post-COVID supply-chain disruptions "
-        "and the Russia-Ukraine war impact on fuel/food prices."
-    )
+    st.markdown("""
+    <div class="note note-gold">
+      <b>2009 spike (13.1%):</b> Global food and fuel price shock amplified by Nepal's high
+      import dependency on India. Supply-side constraints — limited storage, poor road access
+      — intensified the pass-through effect on consumer prices.
+    </div>
+    <div class="note note-green">
+      <b>2025 disinflation (3.0%):</b> Five-year low. Easing global commodity prices, a
+      stable NPR, and softer domestic demand contributed. NRB maintained a cautious monetary
+      stance throughout FY2024/25. Source: NRB, March 2026.
+    </div>
+    """, unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TRADE TAB
-# ─────────────────────────────────────────────────────────────────────────────
-
+# ══ TRADE ═════════════════════════════════════════════════════════════════════
 with tab_trade:
-    st.markdown('<div class="section-header">Import vs Export Analysis</div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="stat-row">
+      <div class="stat">
+        <div class="stat-label">Exports ({int(latest['year'])})</div>
+        <div class="stat-value">${latest['exports_usd_million']:,.0f}M</div>
+        <div class="stat-sub">{latest['export_growth_pct']:+.1f}% YoY</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Imports ({int(latest['year'])})</div>
+        <div class="stat-value">${latest['imports_usd_million']:,.0f}M</div>
+        <div class="stat-sub">{latest['import_growth_pct']:+.1f}% YoY</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Trade Balance</div>
+        <div class="stat-value">${latest['trade_balance_usd_million']/1000:.2f}B</div>
+        <div class="stat-sub">{'Deficit' if latest['trade_balance_usd_million']<0 else 'Surplus'}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">FX Reserves</div>
+        <div class="stat-value">$20.4B</div>
+        <div class="stat-sub">13+ months import cover · NRB 2026</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    total_exports = df["exports_usd_million"].sum()
-    total_imports = df["imports_usd_million"].sum()
-    avg_deficit = df["trade_balance_usd_million"].mean()
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Latest Exports", f"${latest['exports_usd_million']:,.0f}M",
-              f"{latest['export_growth_pct']:+.1f}% YoY")
-    m2.metric("Latest Imports", f"${latest['imports_usd_million']:,.0f}M",
-              f"{latest['import_growth_pct']:+.1f}% YoY")
-    m3.metric("Trade Balance",
-              f"${latest['trade_balance_usd_million']:,.0f}M",
-              "Deficit" if latest["trade_balance_usd_million"] < 0 else "Surplus")
-
-    c1, c2 = st.columns([2, 1])
+    c1, c2 = st.columns([3, 2])
     with c1:
         st.plotly_chart(trade_comparison(df), use_container_width=True)
     with c2:
-        pie_year = st.selectbox("Select year for composition",
-                                sorted(df["year"].tolist(), reverse=True), key="pie_year")
-        st.plotly_chart(trade_composition_pie(df, pie_year), use_container_width=True)
+        yr = st.selectbox("Year", sorted(df["year"].tolist(), reverse=True), key="pie_yr")
+        st.plotly_chart(trade_composition_pie(df, yr), use_container_width=True)
 
     st.plotly_chart(trade_balance_chart(df), use_container_width=True)
 
-    st.warning(
-        "Nepal runs a **persistent trade deficit** — imports consistently exceed exports by 8–15×. "
-        "Remittance inflows partially compensate for this structural imbalance."
-    )
+    st.markdown("""
+    <div class="note note-gold">
+      <b>Structural deficit:</b> Imports consistently exceed exports by 5–15x across the
+      study period, driven by energy, machinery, and consumer goods from India and China.
+      Remittance inflows remain the primary external offset.
+    </div>
+    <div class="note note-green">
+      <b>2026 export acceleration:</b> Early FY2025/26 data shows merchandise exports
+      doubling year-on-year, led by soybean oil (43% share) and jute products. FX reserves
+      reached a record $20.41B. Source: NRB, The Himalayan Times.
+    </div>
+    """, unsafe_allow_html=True)
 
+# ══ REMITTANCE ════════════════════════════════════════════════════════════════
+with tab_rem:
+    rc     = cagr(df["remittance_usd_billion"], min(10, len(df)-1))
+    avg_rp = df["remittance_pct_gdp"].mean()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# REMITTANCE TAB
-# ─────────────────────────────────────────────────────────────────────────────
-
-with tab_remittance:
-    st.markdown('<div class="section-header">Remittance Inflow Analysis</div>', unsafe_allow_html=True)
-
-    rem_cagr = cagr(df["remittance_usd_billion"], min(10, len(df) - 1))
-    avg_rem_pct = df["remittance_pct_gdp"].mean()
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Latest Remittance", format_currency(latest["remittance_usd_billion"]),
-              f"{latest['remittance_growth_pct']:+.1f}% YoY")
-    m2.metric("Remittance / GDP", f"{latest['remittance_pct_gdp']:.1f}%",
-              f"Avg {avg_rem_pct:.1f}%")
-    m3.metric("10-Year CAGR", f"{rem_cagr:.1f}%" if not pd.isna(rem_cagr) else "—")
+    st.markdown(f"""
+    <div class="stat-row">
+      <div class="stat">
+        <div class="stat-label">Inflow ({int(latest['year'])})</div>
+        <div class="stat-value">{format_currency(latest['remittance_usd_billion'])}</div>
+        <div class="stat-sub">{latest['remittance_growth_pct']:+.1f}% YoY</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Share of GDP</div>
+        <div class="stat-value">{latest['remittance_pct_gdp']:.1f}%</div>
+        <div class="stat-sub">Avg {avg_rp:.1f}% over period</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">10-Year CAGR</div>
+        <div class="stat-value">{rc:.1f}%</div>
+        <div class="stat-sub">Nominal USD</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">FY2025/26 Q1</div>
+        <div class="stat-value">+35.4%</div>
+        <div class="stat-sub">YoY growth · NRB</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.plotly_chart(remittance_trend(df), use_container_width=True)
 
-    st.success(
-        "Remittance is Nepal's largest source of foreign exchange, accounting for ~20–30% of GDP. "
-        "It funds household consumption, education, and healthcare — acting as a major cushion "
-        "against trade deficits."
-    )
+    st.markdown("""
+    <div class="note note-green">
+      <b>Record milestone (Nov 2025):</b> Monthly remittances exceeded Rs 200 billion for
+      the first time. Growth is driven by an expanding diaspora in Gulf states, Malaysia,
+      and Japan, and greater use of formal banking channels over informal networks.
+      Source: Kathmandu Post.
+    </div>
+    <div class="note note-gold">
+      <b>Dependency risk:</b> Nepal's remittance-to-GDP ratio (~25–30%) is among the
+      world's highest, creating structural exposure to destination-country policy shifts,
+      global recessions, and currency movements not captured in headline GDP figures.
+    </div>
+    """, unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# EMPLOYMENT TAB
-# ─────────────────────────────────────────────────────────────────────────────
-
-with tab_employment:
-    st.markdown('<div class="section-header">Employment & Unemployment Trends</div>',
-                unsafe_allow_html=True)
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Current Unemployment", f"{latest['unemployment_pct']:.1f}%",
-              f"{-(latest['unemployment_pct'] - prev['unemployment_pct']):+.1f}pp")
-    m2.metric("Peak (COVID-19 2020)", "4.4%")
-    m3.metric("Period Low", f"{df['unemployment_pct'].min():.1f}%")
+# ══ EMPLOYMENT ════════════════════════════════════════════════════════════════
+with tab_emp:
+    st.markdown(f"""
+    <div class="stat-row">
+      <div class="stat">
+        <div class="stat-label">Unemployment ({int(latest['year'])})</div>
+        <div class="stat-value">{latest['unemployment_pct']:.1f}%</div>
+        <div class="stat-sub">ILO modeled estimate</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Youth Unemployment</div>
+        <div class="stat-value">~20.8%</div>
+        <div class="stat-sub">2024 · World Bank</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">COVID-19 Peak</div>
+        <div class="stat-value">11.4%</div>
+        <div class="stat-sub">FY 2019/20</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Annual Outmigration</div>
+        <div class="stat-value">500K+</div>
+        <div class="stat-sub">Labour permits · DoFE</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.plotly_chart(unemployment_trend(df), use_container_width=True)
 
-    st.info(
-        "Nepal's **reported unemployment** is low, but this masks high underemployment and "
-        "disguised unemployment in agriculture. Over 500,000 workers emigrate annually for "
-        "foreign employment, which is why the formal unemployment figure stays suppressed."
-    )
+    st.markdown("""
+    <div class="note note-slate">
+      <b>Methodology break (2018):</b> Nepal adopted the ILO broader definition — including
+      time-related underemployment — following the 2017/18 Labour Force Survey. The pre-2018
+      dotted series reflects the narrow official definition; cross-period comparisons should
+      account for this discontinuity.
+    </div>
+    <div class="note note-gold">
+      <b>Structural underemployment:</b> The ILO rate (~10–11%) captures disguised
+      unemployment in subsistence agriculture and the informal sector. Over 500,000 Nepali
+      workers seek foreign employment annually, suppressing domestic labour market pressure
+      while fuelling remittance growth.
+    </div>
+    """, unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTORS TAB
-# ─────────────────────────────────────────────────────────────────────────────
-
-with tab_sectors:
-    st.markdown('<div class="section-header">GDP Sector Composition</div>', unsafe_allow_html=True)
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Agriculture Share", f"{latest['agriculture_pct_gdp']:.1f}%",
-              f"{latest['agriculture_pct_gdp'] - prev['agriculture_pct_gdp']:+.1f}pp")
-    m2.metric("Industry Share", f"{latest['industry_pct_gdp']:.1f}%",
-              f"{latest['industry_pct_gdp'] - prev['industry_pct_gdp']:+.1f}pp")
-    m3.metric("Services Share", f"{latest['services_pct_gdp']:.1f}%",
-              f"{latest['services_pct_gdp'] - prev['services_pct_gdp']:+.1f}pp")
+# ══ SECTORS ═══════════════════════════════════════════════════════════════════
+with tab_sec:
+    st.markdown(f"""
+    <div class="stat-row">
+      <div class="stat">
+        <div class="stat-label">Services ({int(latest['year'])})</div>
+        <div class="stat-value">{latest['services_pct_gdp']:.1f}%</div>
+        <div class="stat-sub">{latest['services_pct_gdp']-prev['services_pct_gdp']:+.1f}pp vs prior year</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Agriculture</div>
+        <div class="stat-value">{latest['agriculture_pct_gdp']:.1f}%</div>
+        <div class="stat-sub">{latest['agriculture_pct_gdp']-prev['agriculture_pct_gdp']:+.1f}pp vs prior year</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Industry</div>
+        <div class="stat-value">{latest['industry_pct_gdp']:.1f}%</div>
+        <div class="stat-sub">{latest['industry_pct_gdp']-prev['industry_pct_gdp']:+.1f}pp vs prior year</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">FDI ({int(latest['year'])})</div>
+        <div class="stat-value">${latest['fdi_usd_million']:.0f}M</div>
+        <div class="stat-sub">UNCTAD / NRB</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.plotly_chart(sector_area_chart(df), use_container_width=True)
-
-    st.markdown('<div class="section-header">Foreign Direct Investment</div>',
-                unsafe_allow_html=True)
-    m1, m2 = st.columns(2)
-    m1.metric("Latest FDI", f"${latest['fdi_usd_million']:.1f}M",
-              f"{latest['fdi_usd_million'] - prev['fdi_usd_million']:+.1f}M vs prev")
-    m2.metric("FDI / GDP", f"{(latest['fdi_usd_million'] / (latest['gdp_usd_billion']*1000))*100:.2f}%")
+    st.markdown('<div class="sec">Foreign Direct Investment</div>', unsafe_allow_html=True)
     st.plotly_chart(fdi_trend(df), use_container_width=True)
 
+    st.markdown("""
+    <div class="note note-green">
+      <b>Structural shift:</b> Agriculture's GDP share fell from ~39% (2005) to ~24.5%
+      (2026) as remittance-funded consumption expanded services — trade, finance, real
+      estate, and hospitality. Industry remains at 12–15% due to energy infrastructure gaps.
+    </div>
+    <div class="note note-warn">
+      <b>FDI (2024: $57M):</b> Lowest since 2010 per UNCTAD World Investment Report 2025.
+      Policy uncertainty and the 2025 political unrest deterred investors. China leads
+      approved FDI (~45%), followed by India (~20%). Source: UNCTAD WIR 2025.
+    </div>
+    """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ADVANCED TAB
-# ─────────────────────────────────────────────────────────────────────────────
-
-with tab_advanced:
-    st.markdown('<div class="section-header">Correlation Analysis</div>', unsafe_allow_html=True)
+# ══ DATA ══════════════════════════════════════════════════════════════════════
+with tab_data:
+    st.markdown('<div class="sec">Correlation Matrix</div>', unsafe_allow_html=True)
     st.plotly_chart(correlation_heatmap(df), use_container_width=True)
 
-    st.markdown('<div class="section-header">Full Dataset</div>', unsafe_allow_html=True)
-    display_cols = {
-        "year": "Year",
-        "gdp_usd_billion": "GDP ($B)",
-        "gdp_growth_pct": "GDP Growth (%)",
-        "inflation_pct": "Inflation (%)",
-        "remittance_usd_billion": "Remittance ($B)",
-        "remittance_pct_gdp": "Remittance/GDP (%)",
-        "exports_usd_million": "Exports ($M)",
-        "imports_usd_million": "Imports ($M)",
-        "trade_balance_usd_million": "Trade Balance ($M)",
-        "unemployment_pct": "Unemployment (%)",
-        "fdi_usd_million": "FDI ($M)",
+    st.markdown('<div class="sec">Full Dataset — 2005 to 2026</div>', unsafe_allow_html=True)
+    cols = {
+        "year":                       "Year",
+        "gdp_usd_billion":            "GDP ($B)",
+        "gdp_growth_pct":             "Growth (%)",
+        "inflation_pct":              "Inflation (%)",
+        "remittance_usd_billion":     "Remittance ($B)",
+        "remittance_pct_gdp":         "Remit./GDP (%)",
+        "exports_usd_million":        "Exports ($M)",
+        "imports_usd_million":        "Imports ($M)",
+        "trade_balance_usd_million":  "Trade Balance ($M)",
+        "unemployment_pct":           "Unemployment (%)",
+        "fdi_usd_million":            "FDI ($M)",
+        "fiscal_deficit_pct_gdp":     "Fiscal Deficit (%)",
     }
+    tdf = df[list(cols.keys())].rename(columns=cols).set_index("Year")
     styled = (
-        df[list(display_cols.keys())]
-        .rename(columns=display_cols)
-        .set_index("Year")
-        .style
+        tdf.style
         .format({
-            "GDP ($B)": "{:.2f}",
-            "GDP Growth (%)": "{:+.1f}%",
-            "Inflation (%)": "{:.1f}%",
-            "Remittance ($B)": "{:.2f}",
-            "Remittance/GDP (%)": "{:.1f}%",
-            "Exports ($M)": "{:,.0f}",
-            "Imports ($M)": "{:,.0f}",
-            "Trade Balance ($M)": "{:,.0f}",
-            "Unemployment (%)": "{:.1f}%",
-            "FDI ($M)": "{:.1f}",
+            "GDP ($B)":"{:.2f}", "Growth (%)":"{:+.1f}", "Inflation (%)":"{:.1f}",
+            "Remittance ($B)":"{:.2f}", "Remit./GDP (%)":"{:.1f}",
+            "Exports ($M)":"{:,.0f}", "Imports ($M)":"{:,.0f}",
+            "Trade Balance ($M)":"{:,.0f}", "Unemployment (%)":"{:.1f}",
+            "FDI ($M)":"{:.1f}", "Fiscal Deficit (%)":"{:.1f}",
         })
-        .background_gradient(subset=["GDP Growth (%)"], cmap="RdYlGn")
-        .background_gradient(subset=["Inflation (%)"], cmap="YlOrRd")
+        .background_gradient(subset=["Growth (%)"],    cmap="RdYlGn", vmin=-5,  vmax=10)
+        .background_gradient(subset=["Inflation (%)"], cmap="YlOrRd", vmin=0,   vmax=15)
+        .set_properties(**{"font-size": "12px"})
     )
-    st.dataframe(styled, use_container_width=True)
-
+    st.dataframe(styled, use_container_width=True, height=500)
     st.download_button(
-        label="⬇️ Download Dataset (CSV)",
-        data=df[list(display_cols.keys())].rename(columns=display_cols).to_csv(index=False),
-        file_name="nepal_economic_data.csv",
+        "Download CSV",
+        data=tdf.to_csv(),
+        file_name="nepal_economic_indicators_2005_2026.csv",
         mime="text/csv",
     )
 
-
 # ── Footer ────────────────────────────────────────────────────────────────────
-
-st.markdown("---")
-st.markdown(
-    "<div style='text-align:center; color:#999; font-size:13px;'>"
-    "Nepal Economic Insights Dashboard · Built by <b>Sachin Dhakal</b> · "
-    "Data: World Bank · NRB · CBS · IMF"
-    "</div>",
-    unsafe_allow_html=True,
-)
+st.markdown(f"""
+<div class="footer">
+  <span>Nepal Economic Insights · Sachin Dhakal</span>
+  <span>Sources: World Bank · NRB · CBS · IMF · UNCTAD · Data updated June {YEAR_MAX}</span>
+</div>
+""", unsafe_allow_html=True)
