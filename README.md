@@ -182,7 +182,7 @@ streamlit run app/dashboard.py
 
 ⸻
 
-👤 Author
+👤 Developed
 
 Sachin Dhakal 
 Aspiring Data Analyst / Business Intelligence Specialist

@@ -71,7 +71,7 @@ def inflation_trend(df: pd.DataFrame) -> go.Figure:
     fig.add_trace(go.Scatter(
         x=df["year"], y=df["inflation_pct"], name="CPI Inflation",
         mode="lines+markers",
-        fill="tozeroy", fillcolor="rgba(244,63,94,0.07)",
+        fill="tozeroy", fillcolor="rgba(169,30,46,0.08)",
         line=dict(color=C["chart_b"], width=2.5),
         marker=dict(size=6, color=C["chart_b"]),
         hovertemplate="<b>%{x}</b>: %{y:.1f}%<extra></extra>",
@@ -197,7 +197,7 @@ def fdi_trend(df: pd.DataFrame) -> go.Figure:
     fig = go.Figure(go.Scatter(
         x=df["year"], y=df["fdi_usd_million"], name="FDI Inflow",
         mode="lines+markers",
-        fill="tozeroy", fillcolor="rgba(79,70,229,0.07)",
+        fill="tozeroy", fillcolor="rgba(22,38,62,0.06)",
         line=dict(color=C["chart_a"], width=2.5),
         marker=dict(size=6, color=C["chart_a"]),
         hovertemplate="<b>%{x}</b>: $%{y:.1f}M<extra></extra>",
