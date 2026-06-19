@@ -117,7 +117,7 @@ Use publicly available and reliable datasets:
 
 5️⃣ Dashboard Development
 
-* Use Streamlit (recommended for simplicity)
+* Use Streamlit
 * Add:
     * Sidebar filters
     * Interactive graphs
@@ -125,12 +125,12 @@ Use publicly available and reliable datasets:
 
 ⸻
 
-6️⃣ Deployment (Optional but Strong)
+6️⃣ Deployment 
 
 * Deploy on:
     * Streamlit Cloud
-    * Render / Railway
-* Share public link
+   
+
 
 ⸻
 
